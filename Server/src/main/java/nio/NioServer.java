@@ -1,6 +1,8 @@
 package nio;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -12,8 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.*;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -69,7 +71,7 @@ public class NioServer {
             String files = Files.list(serverPath)
                     .map(path -> path.getFileName().toString())
                     .collect(Collectors.joining(", "));
-            files += "\n";
+            files += System.lineSeparator();
             channel.write(ByteBuffer.wrap(files.getBytes(StandardCharsets.UTF_8)));
         }
         if (command.startsWith("cd")) {
@@ -92,12 +94,13 @@ public class NioServer {
                 channel.write(ByteBuffer.wrap("Wrong command\n".getBytes(StandardCharsets.UTF_8)));
             } else {
                 String targetPath = args[1];
-
-                Path serverDirBefore = serverPath;
-                serverPath = serverPath.resolve(targetPath);
+                Path myPath = Paths.get(serverPath.toString()+"\\"+targetPath);
                 if (!Files.isDirectory(serverPath) && !Files.exists(serverPath)) {
                     channel.write(ByteBuffer.wrap("Wrong arg for cd command\n".getBytes(StandardCharsets.UTF_8)));
-                    serverPath = serverDirBefore;
+                }
+                else{
+                    channel.write(ByteBuffer.wrap(Files.lines(myPath)
+                            .collect(Collectors.toSet()).toString().getBytes(StandardCharsets.UTF_8)));
                 }
             }
         }
@@ -108,15 +111,18 @@ public class NioServer {
                 channel.write(ByteBuffer.wrap("Wrong command\n".getBytes(StandardCharsets.UTF_8)));
             } else {
                 String targetPath = args[1];
-                Path myPath = Paths.get(targetPath);
-
-                String info = Files.getLastModifiedTime(myPath).toString();
-                System.out.println(info);
-
-//                if (!Files.isDirectory(serverPath) && !Files.exists(serverPath)) {
-//                    channel.write(ByteBuffer.wrap("Wrong arg for cd command\n".getBytes(StandardCharsets.UTF_8)));
-//                    //serverPath = targetPath;
-//                }
+                Path myPath = Paths.get(serverPath.toString()+"\\"+targetPath);
+                if (!Files.exists(myPath)) {
+                    channel.write(ByteBuffer.wrap("Wrong arg for touch command\n".getBytes(StandardCharsets.UTF_8)));
+                }
+                else {
+                    BasicFileAttributeView basicView = Files.getFileAttributeView(myPath, BasicFileAttributeView.class);
+                    BasicFileAttributes basicAttribs = basicView.readAttributes();
+                    String data = "size  = "+
+                            basicAttribs.size()+" byte;  create time"+
+                            basicAttribs.creationTime() + System.lineSeparator();
+                    channel.write(ByteBuffer.wrap(data.getBytes(StandardCharsets.UTF_8)));
+                }
             }
         }
 
